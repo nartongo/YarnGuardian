@@ -12,8 +12,8 @@ namespace YarnGuardian.Coordinator
         //  MySqlDataService, ConfigService 
         private readonly MySqlDataService _mySqlDataService;
         private readonly ConfigService _configService;
-        // private readonly ZeroMqClient _zeroMqClient;
-
+        private readonly ZeroMqClient _zeroMqClient;
+        private readonly TaskController _taskController;
 
         // 事件名称常量 (确保与发布者一致)
         
@@ -21,23 +21,31 @@ namespace YarnGuardian.Coordinator
         private const string EVENT_START_CLICKED = "EVENT_START"; 
         private const string EVENT_STOP_CLICKED = "EVENT_STOP";   
 
+
+        private void SubscribeToBackendCommands()
+        {
+            EventHub.Instance.Subscribe("BackendCommandReceived", HandleBackendCommandReceived);
+        }
+
         // 构造函数：注入依赖的服务
         public MainCoordinator(
             AGVService agvService,
             PLCService plcService,
             MySqlDataService mySqlDataService,
-            ConfigService configService
-            // ZeroMqClient zeroMqClient
+            ConfigService configService,
+            ZeroMqClient zeroMqClient,
+            TaskController taskController
             )
         {
             _agvService = agvService ?? throw new ArgumentNullException(nameof(agvService));
             _plcService = plcService ?? throw new ArgumentNullException(nameof(plcService));
             _configService = configService ?? throw new ArgumentNullException(nameof(configService));
             _mySqlDataService = mySqlDataService ?? throw new ArgumentNullException(nameof(mySqlDataService));
-            
-            // _zeroMqClient = zeroMqClient ?? throw new ArgumentNullException(nameof(zeroMqClient));
+            _taskController = taskController ?? throw new ArgumentNullException(nameof(taskController));
+            _zeroMqClient = zeroMqClient ?? throw new ArgumentNullException(nameof(zeroMqClient));
 
             SubscribeToSystemEvents();
+            SubscribeToBackendCommands();
         }
 
         private void SubscribeToSystemEvents()
@@ -48,6 +56,37 @@ namespace YarnGuardian.Coordinator
             Console.WriteLine("[MainCoordinator] 已订阅系统启动和停止事件。");
         }
 
+
+        //后端任务传过来的细纱机
+        private void HandleBackendCommandReceived(object eventData)
+        {
+            // eventData 是 ZeroMqClient 里发布的匿名对象
+            try
+            {
+                // 用 dynamic 解析
+                dynamic data = eventData;
+                string type = data.Type;
+                var sideNumber = data.SideNumber;
+                var taskId = data.TaskId;
+                var originalMessage = data.OriginalMessage;
+
+                Console.WriteLine($"[MainCoordinator] 收到后端命令: Type={type}, SideNumber={sideNumber}, TaskId={taskId}");
+
+                // 你可以根据 type 做不同处理
+                if (type == "StartRepairTask")
+                {
+                    // 这里可以调用你的业务逻辑
+                    
+                    // 根据sideNumber 查询switch_points 表，返回对应的 switch_point_id。
+                    _taskController.HandleStartRepairTask(data);
+                    
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[MainCoordinator] 解析后端命令出错: {ex.Message}");
+            }
+        }
         private async void HandleStartButtonClicked(object payload)
         {
             // payload 通常是事件发布时传递的数据，这里是 DateTime
