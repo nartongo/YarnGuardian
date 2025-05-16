@@ -219,6 +219,30 @@ namespace YarnGuardian.Services
         }
         
         /// <summary>
+        /// 写float类型到寄存器（占用2个寄存器，Modbus标准顺序：高字在前） 写入浮点数优先用此方法
+        /// </summary>
+        public async Task WriteRegisterAsync(string address, float value)
+        {
+            if (!_isConnected)
+                throw new InvalidOperationException("PLC未连接");
+
+            int registerIndex = ParseRegisterAddress(address);
+            // float转2个ushort
+            byte[] bytes = BitConverter.GetBytes(value);
+            if (BitConverter.IsLittleEndian)
+            {
+                // Modbus通常高字在前，低字在后
+                Array.Reverse(bytes);
+            }
+            ushort high = BitConverter.ToUInt16(bytes, 0);
+            ushort low = BitConverter.ToUInt16(bytes, 2);
+            int[] regs = new int[] { high, low };
+            await Task.Run(() => {
+                _modbusClient.WriteMultipleRegisters(registerIndex, regs);
+            });
+        }
+        
+        /// <summary>
         /// 读取指定寄存器（如D500）的浮点数值（float，32位，两个寄存器）
         /// </summary>
         /// <param name="address">寄存器地址，如"D500"</param>
