@@ -106,7 +106,8 @@ namespace YarnGuardian.Coordinator
                     Console.WriteLine("ZeroMQ 连接成功，可以进行后续通信。");
                     //向后端发送开始请求信息
                     zeroMqClient.SendStartRequest();
-                    // 可以继续注册订阅、发送消息等
+                    // 启动定时状态上报
+                    StartStatusReporting(zeroMqClient, 30000); // 每30秒上报一次
                 }
                 else
                 {
@@ -167,6 +168,71 @@ namespace YarnGuardian.Coordinator
                 // 即使出错，也应尝试关闭所有能关闭的资源
             }
         }
+
+
+
+        // * 状态上报相关代码
+
+        //采集状态 agv D500的值  agv 的状态 然后定时上报
+        private async Task CollectAndReportStatusAsync(ZeroMqClient zeroMqClient)
+        {
+            // 1. 查询AGV状态
+            AgvStatus agvStatus = await _agvService.QueryDetailedStatusAsync();
+
+            // 2. 查询D500（锭子距离）float值
+            float spindlePosition = await _plcService.GetSpindlePositionAsync();
+
+            // 3. 打包成status对象
+            var status = new
+            {
+                spindlePosition,
+                agv = agvStatus,
+                timestamp = DateTime.UtcNow.ToString("o")
+            };
+
+            // 4. 上报
+            zeroMqClient.SendStatusReport(status);
+        }
+
+
+
+        private CancellationTokenSource _statusReportCts;
+
+        //开始状态上报
+        public void StartStatusReporting(ZeroMqClient zeroMqClient, int intervalMs = 1000)
+        {
+            _statusReportCts = new CancellationTokenSource();
+            Task.Run(async () =>
+            {
+                while (!_statusReportCts.Token.IsCancellationRequested)
+                {
+                    try
+                    {
+                        await CollectAndReportStatusAsync(zeroMqClient);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[MainCoordinator] 状态上报出错: {ex.Message}");
+                    }
+                    await Task.Delay(intervalMs, _statusReportCts.Token);
+                }
+            }, _statusReportCts.Token);
+        }
+
+        //停止状态上报
+        public void StopStatusReporting()
+        {
+            _statusReportCts?.Cancel();
+        }
+
+
+
+
+
+
+
+
+
 
         // 建议在应用程序关闭时取消订阅，以防止内存泄漏
         public void UnsubscribeSystemEvents()

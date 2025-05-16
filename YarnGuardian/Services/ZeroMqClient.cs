@@ -15,7 +15,7 @@ namespace YarnGuardian.Services
         /// <summary>
         /// 此客户端将向其发布消息的地址。
         /// 后端服务器应在此地址上绑定一个 SUB 套接字。
-        /// 示例: "tcp://localhost:5555"
+        
         /// </summary>
         public string PublishAddress { get; set; }
 

@@ -217,5 +217,55 @@ namespace YarnGuardian.Services
                 _modbusClient.WriteSingleRegister(registerIndex, value);
             });
         }
+        
+        /// <summary>
+        /// 读取指定寄存器（如D500）的浮点数值（float，32位，两个寄存器）
+        /// </summary>
+        /// <param name="address">寄存器地址，如"D500"</param>
+        /// <returns>寄存器中的float值</returns>
+        public async Task<float> ReadRegisterFloatAsync(string address)
+        {
+            if (!_isConnected)
+                throw new InvalidOperationException("PLC未连接");
+
+            int registerIndex = ParseRegisterAddress(address);
+            // 读取两个寄存器
+            int[] registers = await Task.Run(() => _modbusClient.ReadHoldingRegisters(registerIndex, 2));
+            // 合成float（Modbus高字在前，低字在后，通常为Big Endian）
+            byte[] bytes = new byte[4];
+            bytes[0] = (byte)(registers[1] & 0xFF);
+            bytes[1] = (byte)((registers[1] >> 8) & 0xFF);
+            bytes[2] = (byte)(registers[0] & 0xFF);
+            bytes[3] = (byte)((registers[0] >> 8) & 0xFF);
+            return BitConverter.ToSingle(bytes, 0);
+        }
+
+        /// <summary>
+        /// 写入float值到指定寄存器（如D500，写入D500-D501）
+        /// </summary>
+        /// <param name="address">寄存器地址，如"D500"</param>
+        /// <param name="value">要写入的float值</param>
+        public async Task WriteRegisterFloatAsync(string address, float value)
+        {
+            if (!_isConnected)
+                throw new InvalidOperationException("PLC未连接");
+
+            int registerIndex = ParseRegisterAddress(address);
+            byte[] bytes = BitConverter.GetBytes(value);
+            // 组装为两个16位寄存器（注意字节序，通常Modbus为Big Endian）
+            int reg0 = (bytes[3] << 8) | bytes[2]; // 高16位
+            int reg1 = (bytes[1] << 8) | bytes[0]; // 低16位
+            int[] regs = new int[] { reg0, reg1 };
+            await Task.Run(() => _modbusClient.WriteMultipleRegisters(registerIndex, regs));
+        }
+
+        /// <summary>
+        /// 获取锭子距离寄存器（D500）的float值
+        /// </summary>
+        /// <returns>寄存器float值</returns>
+        public async Task<float> GetSpindlePositionAsync()
+        {
+            return await ReadRegisterFloatAsync(PLCAddresses.SPINDLE_POSITION);
+        }
     }
 }
