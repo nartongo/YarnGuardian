@@ -63,7 +63,6 @@ namespace YarnGuardian.Coordinator
             try
             {
                 // 1. 配置和启动 AGV 服务
-                //    这里的IP和端口可以从 ConfigService 获取，或者使用默认值
                 string agvIp = _configService.GetAgvIpAddress();
                 int agvPort = _configService.GetAgvPort();
                 _agvService.Configure(agvIp, agvPort);
@@ -74,50 +73,36 @@ namespace YarnGuardian.Coordinator
                 // 2. 连接 PLC 服务
                 string plcIp = _configService.GetPlcIpAddress();
                 int plcPort = _configService.GetPlcPort();
-                //    bool plcConnected = await _plcService.ConnectAsync(plcIp, plcPort);
-                _plcService.Configure(plcIp, plcPort); // 使用 PLCService 内的默认值
-                bool plcConnected = await _plcService.ConnectAsync(); // 示例 IP 和端口
-            
-                if (plcConnected)
-                {
-                    Console.WriteLine("[MainCoordinator] PLC服务已连接。");
-                }
-                else
+                _plcService.Configure(plcIp, plcPort);
+                bool plcConnected = await _plcService.ConnectAsync();
+
+                if (!plcConnected)
                 {
                     Console.WriteLine("[MainCoordinator] PLC服务连接失败。");
-                    // 根据业务逻辑决定是否继续或抛出异常
+                    return;
                 }
 
                 // 3. 连接mysql数据库
                 bool mysqlConnected = await _mySqlDataService.ConnectAsync();
-                if (mysqlConnected)
-                {
-                    Console.WriteLine("[MainCoordinator] MySQL数据库已连接。");
-                }
-                else
+                if (!mysqlConnected)
                 {
                     Console.WriteLine("[MainCoordinator] MySQL数据库连接失败。");
+                    return;
                 }
 
                 // 4. 连接ZeroMqClient
                 ZeroMqClient zeroMqClient = new ZeroMqClient(_configService);
-                if (zeroMqClient.Connect())
-                {
-                    Console.WriteLine("ZeroMQ 连接成功，可以进行后续通信。");
-                    //向后端发送开始请求信息
-                    zeroMqClient.SendStartRequest();
-                    // 启动定时状态上报
-                    StartStatusReporting(zeroMqClient, 30000); // 每30秒上报一次
-                }
-                else
+                if (!zeroMqClient.Connect())
                 {
                     Console.WriteLine("ZeroMQ 连接失败，请检查配置或网络。");
-                    // 可以做重试、报警等处理
+                    return;
                 }
+
+                Console.WriteLine("ZeroMQ 连接成功，可以进行后续通信。");
+                zeroMqClient.SendStartRequest();
+                StartStatusReporting(zeroMqClient, 30000); // 每30秒上报一次
                 
-                // 3. 连接后端服务 (例如 ZeroMQ, MySQL/SQLite)
-                //    _zeroMqClient.Connect();
-                //    Console.WriteLine("[MainCoordinator] ZeroMQ客户端已连接。");
+               
 
                 // TODO: 添加其他必要的初始化逻辑
 
@@ -224,13 +209,6 @@ namespace YarnGuardian.Coordinator
         {
             _statusReportCts?.Cancel();
         }
-
-
-
-
-
-
-
 
 
 

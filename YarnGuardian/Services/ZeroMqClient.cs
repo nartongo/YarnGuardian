@@ -284,7 +284,7 @@ namespace YarnGuardian.Services
                 type = "StatusReport", // 与原始类型一致
                 machineId = _machineId,
                 timestamp = DateTime.UtcNow.ToString("o"),
-                status = status // 状态对象
+                status // 状态对象
             };
             string topic = $"machine.{_machineId}.status.status";
             return Publish(topic, statusReport);
@@ -300,8 +300,8 @@ namespace YarnGuardian.Services
             {
                 type = "TaskAck", // 与原始类型一致
                 machineId = _machineId,
-                taskId = taskId,
-                status = status,
+                taskId,
+                status,
                 timestamp = DateTime.UtcNow.ToString("o")
             };
             // 用于此机器的通用任务 ACK 的主题
@@ -311,35 +311,7 @@ namespace YarnGuardian.Services
 
         
 
-        /// <summary>
-        /// 设置用于处理来自后端的 StartAck 消息的处理程序。
-        /// 订阅主题: "backend.ack.ack.{machineId}" (发往此机器的所有 ack 使用相同主题，
-        /// 消息类型字段将用于区分)
-        /// </summary>
-        public void SetupStartAckHandler()
-        {
-            // 后端将向此机器订阅的主题发布 StartAck 消息。
-            // 发往此机器的 ACK 的示例主题:
-            string topic = $"backend.ack.ack.{_machineId}";
-            Subscribe(topic, messageJson =>
-            {
-                try
-                {
-                    dynamic ack = JsonConvert.DeserializeObject(messageJson); // 反序列化 JSON 消息
-                    // 检查消息中的 'type' 字段以确保它是 StartAck
-                    if (ack != null && ack.type == "StartAck")
-                    {
-                        Console.WriteLine($"ZeroMQ: 收到 StartAck: {messageJson}");
-                        _eventHub.Publish("BackendStartAck", ack); // 转发到本地事件中心
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"处理 StartAck 消息出错: {ex.Message}");
-                }
-            });
-        }
-
+        
         /// <summary>
         /// 设置用于处理来自后端的 StatusAck 消息的处理程序。
         /// 订阅主题: "backend.ack.status.ack.{machineId}"

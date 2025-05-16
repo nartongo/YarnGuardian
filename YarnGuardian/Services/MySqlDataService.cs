@@ -244,5 +244,77 @@ namespace YarnGuardian.Services
                 return false;
             }
         }
+        
+        /// <summary>
+        /// 根据 side_number 查询 switch_points 表，返回对应的 switch_point_id。
+        /// </summary>
+        /// <param name="sideNumber">边号</param>
+        /// <returns>switch_point_id，如果未找到则返回 null</returns>
+        public async Task<string> GetSwitchPointIdBySideNumberAsync(string sideNumber)
+        {
+            const string sql = "SELECT switch_point_id FROM switch_points WHERE side_number = @sideNumber LIMIT 1";
+            var param = new MySqlParameter("@sideNumber", sideNumber);
+            object result = await ExecuteScalarAsync<object>(sql, param);
+            return result?.ToString();
+        }
+        
+        /// <summary>
+        /// 根据配置文件中的 MachineId 查询 agv_wait_points 表，返回对应的 wait_point_id。
+        /// </summary>
+        /// <returns>wait_point_id，如果未找到则返回 null</returns>
+        public async Task<string> GetWaitPointIdByMachineIdAsync()
+        {
+            string machineId = _configService.GetMachineId();
+            const string sql = "SELECT wait_point_id FROM agv_wait_points WHERE machine_id = @machineId LIMIT 1";
+            var param = new MySqlParameter("@machineId", machineId);
+            object result = await ExecuteScalarAsync<object>(sql, param);
+            return result?.ToString();
+        }
+
+        /// <summary>
+        /// 根据边号查询对应细纱机表（data{号}_update）和左右侧，返回所有 value（int 数组），只包含 value 不等于 "0" 的项。
+        /// </summary>
+        /// <param name="sideNumber">边号（1开始）</param>
+        /// <returns>int[]，未找到则返回空数组</returns>
+        public async Task<int[]> GetNonZeroValuesBySideNumberAsync(int sideNumber)
+        {
+            // 计算细纱机号和左右侧
+            int machineNo;
+            string deviceId;
+            if (sideNumber % 2 == 1)
+            {
+                machineNo = (sideNumber + 1) / 2;
+                deviceId = "right";
+            }
+            else
+            {
+                machineNo = sideNumber / 2;
+                deviceId = "left";
+            }
+
+            // 表名
+            string tableName = $"data{machineNo}_update";
+
+            // 拼接SQL，只查 value != '0'
+            string sql = $"SELECT value FROM {tableName} WHERE deviceId = @deviceId AND value != '0'";
+            var param = new MySqlParameter("@deviceId", deviceId);
+
+            var dt = await ExecuteQueryAsync(sql, param);
+            if (dt.Rows.Count == 0)
+                return Array.Empty<int>();
+
+            var result = new int[dt.Rows.Count];
+            for (int i = 0; i < dt.Rows.Count; i++)
+            {
+                if (int.TryParse(dt.Rows[i]["value"].ToString(), out int v))
+                    result[i] = v;
+                else
+                    result[i] = 0; // 或者抛异常/其它处理
+            }
+            return result;
+        }
+
+
+        
     }
 }
