@@ -270,6 +270,38 @@ namespace YarnGuardian.Services
         }
         
         /// <summary>
+        /// 获取奇数边号断头排序方式
+        /// </summary>
+        public string GetBreakPointSortOddSide()
+        {
+            return _config.BreakPointSortOddSide;
+        }
+        
+        /// <summary>
+        /// 获取偶数边号断头排序方式
+        /// </summary>
+        public string GetBreakPointSortEvenSide()
+        {
+            return _config.BreakPointSortEvenSide;
+        }
+        
+        /// <summary>
+        /// 设置奇数边号断头排序方式
+        /// </summary>
+        public void SetBreakPointSortOddSide(string sort)
+        {
+            _config.BreakPointSortOddSide = sort;
+        }
+        
+        /// <summary>
+        /// 设置偶数边号断头排序方式
+        /// </summary>
+        public void SetBreakPointSortEvenSide(string sort)
+        {
+            _config.BreakPointSortEvenSide = sort;
+        }
+        
+        /// <summary>
         /// 加载配置文件
         /// </summary>
         public void LoadConfig()
@@ -350,6 +382,10 @@ namespace YarnGuardian.Services
         // 系统设置
         public bool AutoStart { get; set; }
         public string LogLevel { get; set; }
+        
+        // 断头排序规则
+        public string BreakPointSortOddSide { get; set; } = "Asc";   // "Asc" 或 "Desc"
+        public string BreakPointSortEvenSide { get; set; } = "Desc"; // "Asc" 或 "Desc"
         
         // 可根据需要添加其他配置项...
     }

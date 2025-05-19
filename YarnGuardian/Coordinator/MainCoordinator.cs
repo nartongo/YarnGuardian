@@ -24,7 +24,7 @@ namespace YarnGuardian.Coordinator
 
         private void SubscribeToBackendCommands()
         {
-            EventHub.Instance.Subscribe("BackendCommandReceived", HandleBackendCommandReceived);
+            EventHub.Instance.Subscribe("BackendCommandReceived", async (eventData) => await HandleBackendCommandReceived(eventData));
         }
 
         // 构造函数：注入依赖的服务
@@ -58,7 +58,7 @@ namespace YarnGuardian.Coordinator
 
 
         //后端任务传过来的细纱机
-        private void HandleBackendCommandReceived(object eventData)
+        private async Task HandleBackendCommandReceived(object eventData)
         {
             // eventData 是 ZeroMqClient 里发布的匿名对象
             try
@@ -72,14 +72,15 @@ namespace YarnGuardian.Coordinator
 
                 Console.WriteLine($"[MainCoordinator] 收到后端命令: Type={type}, SideNumber={sideNumber}, TaskId={taskId}");
 
-                // 你可以根据 type 做不同处理
+                // 根据type 做不同处理
                 if (type == "StartRepairTask")
                 {
-                    // 这里可以调用你的业务逻辑
-                    
-                    // 根据sideNumber 查询switch_points 表，返回对应的 switch_point_id。
-                    _taskController.HandleStartRepairTask(data);
-                    
+                    // 1. 控制agv移动到权限切换点
+                    await _taskController.ExecuteRepairTaskAsync(data, _agvService, _plcService);
+                    //2. 获取该边断头数据
+                    int[] breakPointData = await _taskController.GetBreakPointData(data);
+
+
                 }
             }
             catch (Exception ex)

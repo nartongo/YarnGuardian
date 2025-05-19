@@ -21,6 +21,7 @@ namespace YarnGuardian.Services
         {
             // 线圈地址
             public const string SWITCH_POINT_ARRIVED = "M500"; // 告知PLC到达切换点信号
+            public const string SWITCH_POINT_ARRIVED_FEEDBACK = "M610"; // PLC 收到切换点信号反馈
             public const string TRIGGER_ROLLERS = "M501";      // 左右皮辊信号
             public const string SPINDLE_ARRIVAL = "M600";      // PLC到达锭位信号
             public const string REPAIR_DONE = "M601";          // 接头完成信号
