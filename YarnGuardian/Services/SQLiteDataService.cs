@@ -184,5 +184,44 @@ CREATE TABLE IF NOT EXISTS side_value (
                 }
             }
         }
+
+        /// <summary>
+        /// 缓存某边号对应的所有distance_value到sqlite（先删后插）
+        /// </summary>
+        public async Task ReplaceSpindleDistanceValuesAsync(string sideNumber, float[] distanceValues)
+        {
+            using (var connection = new SqliteConnection(_connectionString))
+            {
+                await connection.OpenAsync();
+                using (var transaction = connection.BeginTransaction())
+                {
+                    // 创建表（如不存在）
+                    var createCmd = connection.CreateCommand();
+                    createCmd.CommandText = @"CREATE TABLE IF NOT EXISTS spindle_distance_cache (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        side_number TEXT NOT NULL,
+                        distance_value REAL
+                    );";
+                    createCmd.ExecuteNonQuery();
+
+                    // 删除旧数据
+                    var delCmd = connection.CreateCommand();
+                    delCmd.CommandText = "DELETE FROM spindle_distance_cache WHERE side_number = @side_number";
+                    delCmd.Parameters.AddWithValue("@side_number", sideNumber);
+                    await delCmd.ExecuteNonQueryAsync();
+
+                    // 插入新数据
+                    foreach (var value in distanceValues)
+                    {
+                        var insCmd = connection.CreateCommand();
+                        insCmd.CommandText = "INSERT INTO spindle_distance_cache (side_number, distance_value) VALUES (@side_number, @distance_value)";
+                        insCmd.Parameters.AddWithValue("@side_number", sideNumber);
+                        insCmd.Parameters.AddWithValue("@distance_value", value);
+                        await insCmd.ExecuteNonQueryAsync();
+                    }
+                    transaction.Commit();
+                }
+            }
+        }
     }
 }

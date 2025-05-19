@@ -314,6 +314,37 @@ namespace YarnGuardian.Services
             return result;
         }
 
+        /// <summary>
+        /// 根据边号（字符串）查询所有对应的distance_value（spindle字段以边号开头）
+        /// </summary>
+        /// <param name="sideNumber">边号（字符串）</param>
+        /// <returns>distance_value数组</returns>
+        public async Task<float[]> GetDistanceValuesBySideNumberAsync(string sideNumber)
+        {
+            // 1. 以边号作为前缀，查找所有spindle以该边号开头的记录
+            string prefix = sideNumber;
+            // 2. 构造SQL，使用LIKE和参数化，防止SQL注入
+            string sql = "SELECT distance_value FROM spindle_distance_value WHERE spindle LIKE @prefix";
+            var param = new MySql.Data.MySqlClient.MySqlParameter("@prefix", prefix + "%");
+            // 3. 执行查询，返回DataTable
+            var dt = await ExecuteQueryAsync(sql, param);
+            if (dt.Rows.Count == 0)
+                return Array.Empty<float>(); // 没有数据则返回空数组
+            // 4. 遍历结果，将distance_value字段转为float数组
+            var result = new float[dt.Rows.Count];
+            for (int i = 0; i < dt.Rows.Count; i++)
+            {
+                // 尝试将distance_value字段转为float，失败则赋值为0f
+                if (float.TryParse(dt.Rows[i]["distance_value"].ToString(), out float v))
+                    result[i] = v;
+                else
+                    result[i] = 0f; // 或者抛异常/其它处理
+            }
+            // 5. 返回所有distance_value组成的数组
+            return result;
+        }
+
+        //
 
         
     }

@@ -29,6 +29,7 @@ namespace YarnGuardian.Services
             
             // 寄存器地址
             public const string SPINDLE_POSITION = "D500";     // 锭子距离寄存器地址
+            public const string CONFIGURE_MOVE = "M510";     // 执行移动
         }
         
         public PLCService()
