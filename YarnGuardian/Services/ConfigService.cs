@@ -302,6 +302,38 @@ namespace YarnGuardian.Services
         }
         
         /// <summary>
+        /// 获取奇数边号皮辊信号
+        /// </summary>
+        public bool GetRollerSignalForOddSide()
+        {
+            return _config.RollerSignalForOddSide;
+        }
+        
+        /// <summary>
+        /// 获取偶数边号皮辊信号
+        /// </summary>
+        public bool GetRollerSignalForEvenSide()
+        {
+            return _config.RollerSignalForEvenSide;
+        }
+        
+        /// <summary>
+        /// 设置奇数边号皮辊信号
+        /// </summary>
+        public void SetRollerSignalForOddSide(bool value)
+        {
+            _config.RollerSignalForOddSide = value;
+        }
+        
+        /// <summary>
+        /// 设置偶数边号皮辊信号
+        /// </summary>
+        public void SetRollerSignalForEvenSide(bool value)
+        {
+            _config.RollerSignalForEvenSide = value;
+        }
+        
+        /// <summary>
         /// 加载配置文件
         /// </summary>
         public void LoadConfig()
@@ -386,6 +418,9 @@ namespace YarnGuardian.Services
         // 断头排序规则
         public string BreakPointSortOddSide { get; set; } = "Asc";   // "Asc" 或 "Desc"
         public string BreakPointSortEvenSide { get; set; } = "Desc"; // "Asc" 或 "Desc"
+        // 皮辊信号配置（奇偶边号分别对应 true/false）
+        public bool RollerSignalForOddSide { get; set; } = true;
+        public bool RollerSignalForEvenSide { get; set; } = false;
         
         // 可根据需要添加其他配置项...
     }

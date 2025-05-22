@@ -359,7 +359,7 @@ namespace YarnGuardian.Services
                         var eventData = new
                         {
                             Type = "StartRepairTask", // 根据原始逻辑
-                            SideNumber = taskAssignment.spinningMachineId, // 边号
+                            SideNumber = taskAssignment.spinningMachineId, // 边号一定要让后端传过来的是int 类型
                             TaskId = taskAssignment.taskId, // 任务ID
                             OriginalMessage = taskAssignment // 如果下游需要，则包含原始消息
                         };

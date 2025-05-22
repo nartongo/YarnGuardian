@@ -21,15 +21,28 @@ namespace YarnGuardian.Services
         {
             // 线圈地址
             public const string SWITCH_POINT_ARRIVED = "M500"; // 告知PLC到达切换点信号
-            public const string SWITCH_POINT_ARRIVED_FEEDBACK = "M610"; // PLC 收到切换点信号反馈
-            public const string TRIGGER_ROLLERS = "M501";      // 左右皮辊信号
-            public const string SPINDLE_ARRIVAL = "M600";      // PLC到达锭位信号
-            public const string REPAIR_DONE = "M601";          // 接头完成信号
+
+
+            // PLC 前往权限切换点相关
+            public const string PLC_GOTO_SWITCH_POINT = "M502"; // PLC 前往权限切换点
             public const string BACK_TO_SWITCH_POINT = "M602"; // PLC告知到达权限切换点
+
+
+            public const string SWITCH_POINT_ARRIVED_FEEDBACK = "M610"; // PLC 完成权限切换反馈
+            public const string TRIGGER_ROLLERS = "M501";      // 左右皮辊信号
             
+            public const string REPAIR_DONE = "M601";          // 接头完成信号
+           
+            public const string CONFIGURE_MOVE = "M510";     // 执行移动
+            public const string SPINDLE_ARRIVAL = "M600";      // PLC到达锭位信号
+            
+            public const string TURN_BACK = "M511";     // 掉头
+
+            public const string TURN_BACK_FEEDBACK = "M611";     // 掉头反馈
+
             // 寄存器地址
             public const string SPINDLE_POSITION = "D500";     // 锭子距离寄存器地址
-            public const string CONFIGURE_MOVE = "M510";     // 执行移动
+            
         }
         
         public PLCService()
@@ -292,6 +305,24 @@ namespace YarnGuardian.Services
         public async Task<float> GetSpindlePositionAsync()
         {
             return await ReadRegisterFloatAsync(PLCAddresses.SPINDLE_POSITION);
+        }
+
+        /// <summary>
+        /// 告知PLC需要掉头（M511写入true）
+        /// </summary>
+        public async Task TurnBackAsync()
+        {
+            await WriteCoilAsync(PLCAddresses.TURN_BACK, true);
+            Console.WriteLine("[PLCService] 已发送掉头信号 (M511=TRUE)");
+        }
+
+        /// <summary>
+        /// 告知PLC前往权限切换点（M502写入true）
+        /// </summary>
+        public async Task GoToSwitchPointAsync()
+        {
+            await WriteCoilAsync(PLCAddresses.PLC_GOTO_SWITCH_POINT, true);
+            Console.WriteLine("[PLCService] 已发送前往权限切换点信号 (M502=TRUE)");
         }
     }
 }

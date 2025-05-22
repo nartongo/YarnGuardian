@@ -14,6 +14,7 @@ namespace YarnGuardian.Coordinator
         private readonly ConfigService _configService;
         private readonly ZeroMqClient _zeroMqClient;
         private readonly TaskController _taskController;
+        private readonly SQLiteDataService _sqliteDataService;
 
         // 事件名称常量 (确保与发布者一致)
         
@@ -34,7 +35,8 @@ namespace YarnGuardian.Coordinator
             MySqlDataService mySqlDataService,
             ConfigService configService,
             ZeroMqClient zeroMqClient,
-            TaskController taskController
+            TaskController taskController,
+            SQLiteDataService sqliteDataService
             )
         {
             _agvService = agvService ?? throw new ArgumentNullException(nameof(agvService));
@@ -43,6 +45,7 @@ namespace YarnGuardian.Coordinator
             _mySqlDataService = mySqlDataService ?? throw new ArgumentNullException(nameof(mySqlDataService));
             _taskController = taskController ?? throw new ArgumentNullException(nameof(taskController));
             _zeroMqClient = zeroMqClient ?? throw new ArgumentNullException(nameof(zeroMqClient));
+            _sqliteDataService = sqliteDataService ?? throw new ArgumentNullException(nameof(sqliteDataService));
 
             SubscribeToSystemEvents();
             SubscribeToBackendCommands();
@@ -77,9 +80,61 @@ namespace YarnGuardian.Coordinator
                 {
                     // 1. 控制agv移动到权限切换点
                     await _taskController.ExecuteRepairTaskAsync(data, _agvService, _plcService);
-                    //2. 获取该边断头数据
-                    int[] breakPointData = await _taskController.GetBreakPointData(data);
+                    // 2. 缓存该边的码值到SQLite
+                    float[] values = await _mySqlDataService.GetDistanceValuesBySideNumberAsync(sideNumber.ToString());
+                    await _sqliteDataService.ReplaceSpindleDistanceValuesAsync(sideNumber.ToString(), values);
+                    //2. 获取并缓存该边断头数据
+                    //int[] breakPointData = await _taskController.GetBreakPointData(data);
 
+
+                    //2. 执行改边断头处理完整流程
+                    await _taskController.ProcessAllBreakPointsAsync(data, _plcService, _sqliteDataService, _configService);
+                    //3. 告知PLC 断头处理完成，开始掉头。
+                    await _plcService.TurnBackAsync();
+                    // 4.等待反馈掉头完成
+                    while (true)
+                    {
+                        bool turnBackFeedback = await _plcService.ReadCoilAsync(PLCService.PLCAddresses.TURN_BACK_FEEDBACK);
+                        if (turnBackFeedback)
+                        {
+                            Console.WriteLine("[MainCoordinator] PLC反馈掉头完成。");
+                            break;
+                        }
+                        else
+                        {
+                            Console.WriteLine("[MainCoordinator] 等待PLC反馈掉头完成...");
+                            await Task.Delay(2000);
+                        }
+                    }
+                    // 5. 缓存下一边码值到数据库
+                    float[] nextSideValues = await _mySqlDataService.GetDistanceValuesBySideNumberAsync((sideNumber + 1).ToString());
+                    await _sqliteDataService.ReplaceSpindleDistanceValuesAsync((sideNumber + 1).ToString(), nextSideValues);
+
+                    //6. 下一边的断头进行处理
+                    data.side_number = sideNumber + 1; // 这里修改了 边号后面的边号都是传入的边号值+1
+                    await _taskController.ProcessAllBreakPointsAsync(data, _plcService, _sqliteDataService, _configService);
+                    //7. 告知plc 前往权限切换点
+                    await _plcService.GoToSwitchPointAsync();
+                    //8. 告知PLC 切换点码值
+                    await _taskController.WriteSwitchPointValueAsync(sideNumber, 001, _plcService, _sqliteDataService);
+                    // 9. 查找等待点
+                    string waitPointId = await _mySqlDataService.GetWaitPointIdByMachineIdAsync();
+                    //10. 控制agv 前往等待点
+                    uint waitPointIdUint = uint.Parse(waitPointId);
+                    await _agvService.NavigateToPointAsync(waitPointIdUint);
+                    //11. 等待agv 到达等待点
+                    while (true)
+                    {
+                        bool arrived = await _agvService.HasReachedTargetPointAsync();
+                        if (arrived)
+                        {
+                            Console.WriteLine("[MainCoordinator] AGV已到达等待点");
+                            break;
+                        }
+                        Console.WriteLine("[MainCoordinator] 等待AGV到达等待点...");
+                        await Task.Delay(2000);
+                    }
+                    
 
                 }
             }

@@ -223,5 +223,28 @@ CREATE TABLE IF NOT EXISTS side_value (
                 }
             }
         }
+
+        /// <summary>
+        /// 查询指定边号下某锭号的 distance_value（spindle_distance_cache）
+        /// </summary>
+        /// <param name="sideNumber">边号（字符串）</param>
+        /// <param name="spindle">锭号（int）</param>
+        /// <returns>distance_value，如果未找到则返回 null</returns>
+        public async Task<float?> GetDistanceValueBySpindleAsync(string sideNumber, int spindle)
+        {
+            using (var connection = new SqliteConnection(_connectionString))
+            {
+                await connection.OpenAsync();
+                var cmd = connection.CreateCommand();
+                // 拼接边号和锭号作为spindle主键，如17020
+                string spindleKey = sideNumber + spindle.ToString("D3"); // 假设锭号补零到3位
+                cmd.CommandText = "SELECT distance_value FROM spindle_distance_cache WHERE spindle = @spindle";
+                cmd.Parameters.AddWithValue("@spindle", spindleKey);
+                var result = await cmd.ExecuteScalarAsync();
+                if (result == null || result == DBNull.Value)
+                    return null;
+                return Convert.ToSingle(result);
+            }
+        }
     }
 }
