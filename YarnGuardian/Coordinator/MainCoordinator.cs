@@ -2,7 +2,7 @@ using YarnGuardian.Common;
 using YarnGuardian.Services;
 using YarnGuardian.MQHandler;
 using YarnGuardian.Server;
-
+using YarnGuardian.Common;
 namespace YarnGuardian.Coordinator
 {
     public class MainCoordinator
@@ -342,6 +342,11 @@ namespace YarnGuardian.Coordinator
                     case "get_schedule":
                         StopStatusReporting();
                         break;
+                    case "start_repair_task":
+                    // 处理断头任务, 先反序列化
+                        var repairTask = System.Text.Json.JsonSerializer.Deserialize<RepairTaskMsg>(System.Text.Json.JsonSerializer.Serialize(msg.Content));
+                        await ExecuteRepairTaskWorkflow(repairTask);
+                        break;
                     case "status_report":
                         await CollectAndReportStatusAsync();
                         break;
@@ -355,5 +360,75 @@ namespace YarnGuardian.Coordinator
                 MQApi.SetTransferResult(1, ex.Message);
             }
         }
+
+
+        //方法重载
+        private async Task ExecuteRepairTaskWorkflow(RepairTaskMsg taskData)
+        {
+            try
+            {
+                int sideNumber = taskData.SideNumber;
+                Console.WriteLine($"[MainCoordinator] 收到断头任务: SideNumber={taskData.SideNumber}, TaskId={taskData.TaskId}");
+                // 1. 控制agv移动到权限切换点
+                await _taskController.ExecuteRepairTaskAsync(taskData, _agvService, _plcService);
+                // 2. 缓存该边的码值到SQLite
+                float[] values = await _mySqlDataService.GetDistanceValuesBySideNumberAsync(taskData.SideNumber.ToString());
+                await _sqliteDataService.ReplaceSpindleDistanceValuesAsync(taskData.SideNumber.ToString(), values);
+                // 3. 执行该边断头处理完整流程
+                await _taskController.ProcessAllBreakPointsAsync(taskData, _plcService, _sqliteDataService, _configService);
+                //3. 告知PLC 断头处理完成，开始掉头。
+                await _plcService.TurnBackAsync();
+                // 4.等待反馈掉头完成
+                while (true)
+                {
+                    bool turnBackFeedback = await _plcService.ReadCoilAsync(PLCService.PLCAddresses.TURN_BACK_FEEDBACK);
+                    if (turnBackFeedback)
+                    {
+                        Console.WriteLine("[MainCoordinator] PLC反馈掉头完成。");
+                        break;
+                    }
+                    else
+                    {
+                        Console.WriteLine("[MainCoordinator] 等待PLC反馈掉头完成...");
+                        await Task.Delay(2000);
+                    }
+                }
+                // 5. 缓存下一边码值到数据库
+                float[] nextSideValues = await _mySqlDataService.GetDistanceValuesBySideNumberAsync((sideNumber + 1).ToString());
+                await _sqliteDataService.ReplaceSpindleDistanceValuesAsync((sideNumber + 1).ToString(), nextSideValues);
+
+                //6. 下一边的断头进行处理
+                sideNumber = sideNumber + 1; // 这里修改了 边号后面的边号都是传入的边号值+1
+                await _taskController.ProcessAllBreakPointsAsync(taskData, _plcService, _sqliteDataService, _configService);
+                //7. 告知plc 前往权限切换点
+                await _plcService.GoToSwitchPointAsync();
+                //8. 告知PLC 切换点码值
+                await _taskController.WriteSwitchPointValueAsync(sideNumber, 001, _plcService, _sqliteDataService);
+                // 9. 查找等待点
+                string waitPointId = await _mySqlDataService.GetWaitPointIdByMachineIdAsync();
+                //10. 控制agv 前往等待点
+                uint waitPointIdUint = uint.Parse(waitPointId);
+                await _agvService.NavigateToPointAsync(waitPointIdUint);
+                //11. 等待agv 到达等待点
+                while (true)
+                {
+                    bool arrived = await _agvService.HasReachedTargetPointAsync();
+                    if (arrived)
+                    {
+                        Console.WriteLine("[MainCoordinator] AGV已到达等待点");
+                        break;
+                    }
+                    Console.WriteLine("[MainCoordinator] 等待AGV到达等待点...");
+                    await Task.Delay(2000);
+                    }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[MainCoordinator] 处理断头任务出错: {ex.Message}");
+                throw;
+            }
+        }
     }
+
+    
 }

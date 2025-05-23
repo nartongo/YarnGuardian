@@ -1,6 +1,7 @@
 using YarnGuardian.Services;
 using System.Text.Json;
 using System.Linq;
+using YarnGuardian.Common;
 
 namespace YarnGuardian.Coordinator
 {
@@ -115,12 +116,12 @@ namespace YarnGuardian.Coordinator
         /// <param name="plcService">PLC服务</param>
         /// <param name="sqliteDataService">SQLite服务</param>
         /// <param name="configService">配置服务</param>
-        public async Task ProcessAllBreakPointsAsync(dynamic eventData, PLCService plcService, SQLiteDataService sqliteDataService, ConfigService configService)
+        public async Task ProcessAllBreakPointsAsync(YarnGuardian.Common.RepairTaskMsg taskData, PLCService plcService, SQLiteDataService sqliteDataService, ConfigService configService)
         {
-            int sideNumber = eventData.SideNumber;
+            int sideNumber = taskData.SideNumber;
             
             // 获取所有断头数据
-            int[] breakPoints = await GetBreakPointData(eventData);
+            int[] breakPoints = await GetBreakPointData(taskData);
             if (breakPoints == null || breakPoints.Length == 0)
             {
                 Console.WriteLine($"[TaskController] 边号{sideNumber}未获取到断头锭号，流程中止。");

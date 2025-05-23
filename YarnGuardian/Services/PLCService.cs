@@ -39,7 +39,7 @@ namespace YarnGuardian.Services
             public const string TURN_BACK = "M511";     // 掉头
 
             public const string TURN_BACK_FEEDBACK = "M611";     // 掉头反馈
-
+            
             // 寄存器地址
             public const string SPINDLE_POSITION = "D500";     // 锭子距离寄存器地址
             
@@ -105,7 +105,7 @@ namespace YarnGuardian.Services
             {
                 if (!_modbusClient.Connected)
                     return;
-                    
+                
                 // 在后台线程中执行断开连接操作
                 await Task.Run(() => {
                     _modbusClient.Disconnect();
