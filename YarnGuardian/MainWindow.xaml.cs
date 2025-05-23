@@ -36,4 +36,13 @@ public partial class MainWindow : Window
         // 窗口关闭时取消注册事件处理器，避免内存泄漏
         _eventHandlers.UnregisterHandlers();
     }
+    
+    public void Log(string message)
+    {
+        Dispatcher.BeginInvoke(() =>
+        {
+            this.tbxMsg.Text += message;
+            this.tbxMsg.Text += Environment.NewLine;
+        });
+    }
 }

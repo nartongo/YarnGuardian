@@ -1,7 +1,7 @@
-using System;
-using System.Threading.Tasks;
-using YarnGuardian.Common; 
-using YarnGuardian.Services; 
+using YarnGuardian.Common;
+using YarnGuardian.Services;
+using YarnGuardian.MQHandler;
+using YarnGuardian.Server;
 
 namespace YarnGuardian.Coordinator
 {
@@ -163,7 +163,7 @@ namespace YarnGuardian.Coordinator
                 _agvService.Configure(agvIp, agvPort);
 
                 _agvService.Configure(); // 使用 AGVService 内的默认值
-                //_agvService.Start(); start也是调用了configure
+                
 
                 // 2. 连接 PLC 服务
                 string plcIp = _configService.GetPlcIpAddress();
@@ -186,16 +186,16 @@ namespace YarnGuardian.Coordinator
                 }
 
                 // 4. 连接ZeroMqClient
-                ZeroMqClient zeroMqClient = new ZeroMqClient(_configService);
-                if (!zeroMqClient.Connect())
-                {
-                    Console.WriteLine("ZeroMQ 连接失败，请检查配置或网络。");
-                    return;
-                }
+                // ZeroMqClient zeroMqClient = new ZeroMqClient(_configService);
+                // if (!zeroMqClient.Connect())
+                // {
+                //     Console.WriteLine("ZeroMQ 连接失败，请检查配置或网络。");
+                //     return;
+                // }
 
-                Console.WriteLine("ZeroMQ 连接成功，可以进行后续通信。");
-                zeroMqClient.SendStartRequest();
-                StartStatusReporting(zeroMqClient, 30000); // 每30秒上报一次
+                // Console.WriteLine("ZeroMQ 连接成功，可以进行后续通信。");
+                // zeroMqClient.SendStartRequest();
+                // StartStatusReporting(zeroMqClient, 30000); // 每30秒上报一次
                 
                
 
@@ -254,7 +254,7 @@ namespace YarnGuardian.Coordinator
         // * 状态上报相关代码
 
         //采集状态 agv D500的值  agv 的状态 然后定时上报
-        private async Task CollectAndReportStatusAsync(ZeroMqClient zeroMqClient)
+        private async Task CollectAndReportStatusAsync()
         {
             // 1. 查询AGV状态
             AgvStatus agvStatus = await _agvService.QueryDetailedStatusAsync();
@@ -263,15 +263,31 @@ namespace YarnGuardian.Coordinator
             float spindlePosition = await _plcService.GetSpindlePositionAsync();
 
             // 3. 打包成status对象
-            var status = new
+            // var status = new
+            // {
+            //     spindlePosition,
+            //     agv = agvStatus,
+            //     timestamp = DateTime.UtcNow.ToString("o")
+            // };
+            
+            var status = new StatusReportModel()
             {
-                spindlePosition,
-                agv = agvStatus,
-                timestamp = DateTime.UtcNow.ToString("o")
+                RobotId = _configService.GetMachineId(),
+                Power =  agvStatus.StateOfCharge ?? 0,
+                Status = "working",
+                TimeStamp = DateTime.UtcNow
+            };
+
+            var msg = new MQMsg<StatusReportModel>()
+            {
+                Module = "agv",
+                Service = "status_report",
+                Content = status
             };
 
             // 4. 上报
-            zeroMqClient.SendStatusReport(status);
+           // zeroMqClient.SendStatusReport(status);
+           MQApi.Instance.BackgroundSend(msg);
         }
 
 
@@ -279,7 +295,7 @@ namespace YarnGuardian.Coordinator
         private CancellationTokenSource _statusReportCts;
 
         //开始状态上报
-        public void StartStatusReporting(ZeroMqClient zeroMqClient, int intervalMs = 1000)
+        public void StartStatusReporting(int intervalMs = 1000)
         {
             _statusReportCts = new CancellationTokenSource();
             Task.Run(async () =>
@@ -288,7 +304,7 @@ namespace YarnGuardian.Coordinator
                 {
                     try
                     {
-                        await CollectAndReportStatusAsync(zeroMqClient);
+                        await CollectAndReportStatusAsync();
                     }
                     catch (Exception ex)
                     {
@@ -313,6 +329,31 @@ namespace YarnGuardian.Coordinator
             EventHub.Instance.Unsubscribe(EVENT_START_CLICKED, HandleStartButtonClicked);
             EventHub.Instance.Unsubscribe(EVENT_STOP_CLICKED, HandleStopButtonClicked);
             Console.WriteLine("[MainCoordinator] 已取消订阅系统事件。");
+        }
+        
+        
+        public async Task MainCoordinatorDispatch<T>(MsgHandler session, MQMsg<T> msg)
+        {
+            try
+            {
+                string service = msg.Service;
+                switch (service)
+                {
+                    case "get_schedule":
+                        StopStatusReporting();
+                        break;
+                    case "status_report":
+                        await CollectAndReportStatusAsync();
+                        break;
+                    default:
+                        MQApi.SetTransferResult(1, "Unexpected Service! [" + service + "]");
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                MQApi.SetTransferResult(1, ex.Message);
+            }
         }
     }
 }

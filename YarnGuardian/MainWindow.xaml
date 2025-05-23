@@ -10,7 +10,7 @@
     <Grid>
         <DockPanel>
             <ui:ControlPanel DockPanel.Dock="Bottom" Height="80"/>
-            <TextBlock Text="系统内容区域" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="24"/>
+            <TextBlock x:Name="tbxMsg" Text="系统内容区域" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="24"/>
         </DockPanel>
     </Grid>
 </Window>
